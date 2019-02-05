@@ -1,0 +1,519 @@
+ 63650 shagar.upa import {
+ 63650 shagar.upa   Component, DoCheck, EventEmitter, Input, IterableDiffers, OnChanges,
+ 63650 shagar.upa   Output, SimpleChange
+ 63650 shagar.upa } from '@angular/core';
+ 63650 shagar.upa 
+ 63650 shagar.upa import { BasicList } from './basic-list';
+ 63650 shagar.upa 
+ 63650 shagar.upa export type compareFunction = (a: any, b: any) => number;
+ 63650 shagar.upa 
+ 63650 shagar.upa @Component({
+ 63650 shagar.upa   selector: 'picklist',
+ 63650 shagar.upa   styleUrls: ['picklist.component.scss'],
+     -          -   templateUrl: 'picklist.component.html' 
+ 63650 shagar.upa })
+ 63650 shagar.upa 
+ 63650 shagar.upa export class PicklistComponent implements DoCheck, OnChanges {
+ 63650 shagar.upa   static AVAILABLE_LIST_NAME = 'available';
+ 63650 shagar.upa   static CONFIRMED_LIST_NAME = 'confirmed';
+ 63650 shagar.upa 
+ 63650 shagar.upa   static LTR = 'left-to-right';
+ 63650 shagar.upa   static RTL = 'right-to-left';
+ 63650 shagar.upa 
+ 63650 shagar.upa   static DEFAULT_FORMAT = { add: 'Add', remove: 'Remove', all: 'Select All', none: 'Deselect All', direction: PicklistComponent.LTR };
+ 63650 shagar.upa 
+ 63650 shagar.upa   @Input() key: string = typeof this.key !== 'undefined' ? this.key : '_id';
+ 63650 shagar.upa   @Input() display: string = typeof this.display !== 'undefined' ? this.display : '_name';
+ 63650 shagar.upa   @Input() height: string = typeof this.height !== 'undefined' ? this.height : '100px';
+ 63650 shagar.upa   @Input() filter: boolean = typeof this.filter !== 'undefined' ? this.filter : false;
+ 63650 shagar.upa   @Input() format: any = typeof this.format !== 'undefined' ? this.format : PicklistComponent.DEFAULT_FORMAT;
+ 63650 shagar.upa   @Input() sort: boolean = typeof this.sort !== 'undefined' ? this.sort : false;
+ 63650 shagar.upa   @Input() compare: compareFunction = typeof this.compare !== 'undefined' ? this.compare : undefined;
+ 63650 shagar.upa   @Input() source: Array<any>;
+ 63650 shagar.upa   @Input() destination: Array<any>;
+ 63650 shagar.upa   @Output() destinationChange = new EventEmitter();
+ 63650 shagar.upa 
+ 63650 shagar.upa   available: BasicList;
+ 63650 shagar.upa   confirmed: BasicList;
+ 63650 shagar.upa 
+ 63650 shagar.upa   sourceDiffer: any;
+ 63650 shagar.upa   destinationDiffer: any;
+ 63650 shagar.upa 
+ 63650 shagar.upa   private sorter = (a: any, b: any) => { return (a._name < b._name) ? -1 : ((a._name > b._name) ? 1 : 0); };
+ 63650 shagar.upa 
+ 63650 shagar.upa   constructor(private differs: IterableDiffers) {
+ 63650 shagar.upa     this.available = new BasicList(PicklistComponent.AVAILABLE_LIST_NAME);
+ 63650 shagar.upa     this.confirmed = new BasicList(PicklistComponent.CONFIRMED_LIST_NAME);
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   ngOnChanges(changeRecord: { [key: string]: SimpleChange }) {
+ 63650 shagar.upa     if (changeRecord['filter']) {
+ 63650 shagar.upa       if (changeRecord['filter'].currentValue === false) {
+ 63650 shagar.upa         this.clearFilter(this.available);
+ 63650 shagar.upa         this.clearFilter(this.confirmed);
+ 63650 shagar.upa       }
+ 63650 shagar.upa     }
+ 63650 shagar.upa 
+ 63650 shagar.upa     if (changeRecord['sort']) {
+ 63650 shagar.upa       if (changeRecord['sort'].currentValue === true && this.compare === undefined) {
+ 63650 shagar.upa         this.compare = this.sorter;
+ 63650 shagar.upa       } else if (changeRecord['sort'].currentValue === false) {
+ 63650 shagar.upa         this.compare = undefined;
+ 63650 shagar.upa       }
+ 63650 shagar.upa     }
+ 63650 shagar.upa 
+ 63650 shagar.upa     if (changeRecord['format']) {
+ 63650 shagar.upa       this.format = changeRecord['format'].currentValue;
+ 63650 shagar.upa 
+ 63650 shagar.upa       if (typeof (this.format.direction) === 'undefined') {
+ 63650 shagar.upa         this.format.direction = PicklistComponent.LTR;
+ 63650 shagar.upa       }
+ 63650 shagar.upa 
+ 63650 shagar.upa       if (typeof (this.format.add) === 'undefined') {
+ 63650 shagar.upa         this.format.add = PicklistComponent.DEFAULT_FORMAT.add;
+ 63650 shagar.upa       }
+ 63650 shagar.upa 
+ 63650 shagar.upa       if (typeof (this.format.remove) === 'undefined') {
+ 63650 shagar.upa         this.format.remove = PicklistComponent.DEFAULT_FORMAT.remove;
+ 63650 shagar.upa       }
+ 63650 shagar.upa 
+ 63650 shagar.upa       if (typeof (this.format.all) === 'undefined') {
+ 63650 shagar.upa         this.format.all = PicklistComponent.DEFAULT_FORMAT.all;
+ 63650 shagar.upa       }
+ 63650 shagar.upa 
+ 63650 shagar.upa       if (typeof (this.format.none) === 'undefined') {
+ 63650 shagar.upa         this.format.none = PicklistComponent.DEFAULT_FORMAT.none;
+ 63650 shagar.upa       }
+ 63650 shagar.upa     }
+ 63650 shagar.upa 
+ 63650 shagar.upa     if (changeRecord['source']) {
+ 63650 shagar.upa       this.available = new BasicList(PicklistComponent.AVAILABLE_LIST_NAME);
+ 63650 shagar.upa       this.updatedSource();
+ 63650 shagar.upa       this.updatedDestination();
+ 63650 shagar.upa     }
+ 63650 shagar.upa 
+ 63650 shagar.upa     if (changeRecord['destination']) {
+ 63650 shagar.upa       this.confirmed = new BasicList(PicklistComponent.CONFIRMED_LIST_NAME);
+ 63650 shagar.upa       this.updatedDestination();
+ 63650 shagar.upa       this.updatedSource();
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   ngDoCheck() {
+ 63650 shagar.upa     if (this.source && this.buildAvailable(this.source)) {
+ 63650 shagar.upa       this.onFilter(this.available);
+ 63650 shagar.upa     }
+ 63650 shagar.upa     if (this.destination && this.buildConfirmed(this.destination)) {
+ 63650 shagar.upa       this.onFilter(this.confirmed);
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   buildAvailable(source: Array<any>): boolean {
+ 63650 shagar.upa     let sourceChanges = this.sourceDiffer.diff(source);
+ 63650 shagar.upa     if (sourceChanges) {
+ 63650 shagar.upa       sourceChanges.forEachRemovedItem((r: any) => {
+ 63650 shagar.upa         let idx = this.findItemIndex(this.available.list, r.item, this.key);
+ 63650 shagar.upa         if (idx !== -1) {
+ 63650 shagar.upa           this.available.list.splice(idx, 1);
+ 63650 shagar.upa         }
+ 63650 shagar.upa       });
+ 63650 shagar.upa 
+ 63650 shagar.upa       sourceChanges.forEachAddedItem((r: any) => {
+ 63650 shagar.upa         // Do not add duplicates even if source has duplicates.
+ 63650 shagar.upa         if (this.findItemIndex(this.available.list, r.item, this.key) === -1) {
+ 63650 shagar.upa           this.available.list.push({ _id: r.item[this.key], _name: this.makeName(r.item) });
+ 63650 shagar.upa         }
+ 63650 shagar.upa       });
+ 63650 shagar.upa 
+ 63650 shagar.upa       if (this.compare !== undefined) {
+ 63650 shagar.upa         this.available.list.sort(this.compare);
+ 63650 shagar.upa       }
+ 63650 shagar.upa       this.available.sift = this.available.list;
+ 63650 shagar.upa 
+ 63650 shagar.upa       return true;
+ 63650 shagar.upa     }
+ 63650 shagar.upa     return false;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   buildConfirmed(destination: Array<any>): boolean {
+ 63650 shagar.upa     let destChanges = this.destinationDiffer.diff(destination);
+ 63650 shagar.upa     if (destChanges) {
+ 63650 shagar.upa       destChanges.forEachRemovedItem((r: any) => {
+ 63650 shagar.upa         let idx = this.findItemIndex(this.confirmed.list, r.item, this.key);
+ 63650 shagar.upa         if (idx !== -1) {
+ 63650 shagar.upa           if (!this.isItemSelected(this.confirmed.pick, this.confirmed.list[idx])) {
+ 63650 shagar.upa             this.selectItem(this.confirmed.pick, this.confirmed.list[idx]);
+ 63650 shagar.upa           }
+ 63650 shagar.upa           this.moveItem(this.confirmed, this.available, this.confirmed.list[idx]);
+ 63650 shagar.upa         }
+ 63650 shagar.upa       });
+ 63650 shagar.upa 
+ 63650 shagar.upa       destChanges.forEachAddedItem((r: any) => {
+ 63650 shagar.upa         let idx = this.findItemIndex(this.available.list, r.item, this.key);
+ 63650 shagar.upa         if (idx !== -1) {
+ 63650 shagar.upa           if (!this.isItemSelected(this.available.pick, this.available.list[idx])) {
+ 63650 shagar.upa             this.selectItem(this.available.pick, this.available.list[idx]);
+ 63650 shagar.upa           }
+ 63650 shagar.upa           this.moveItem(this.available, this.confirmed, this.available.list[idx]);
+ 63650 shagar.upa         }
+ 63650 shagar.upa       });
+ 63650 shagar.upa 
+ 63650 shagar.upa       if (this.compare !== undefined) {
+ 63650 shagar.upa         this.confirmed.list.sort(this.compare);
+ 63650 shagar.upa       }
+ 63650 shagar.upa       this.confirmed.sift = this.confirmed.list;
+ 63650 shagar.upa 
+ 63650 shagar.upa       return true;
+ 63650 shagar.upa     }
+ 63650 shagar.upa     return false;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   updatedSource() {
+ 63650 shagar.upa     this.available.list.length = 0;
+ 63650 shagar.upa     this.available.pick.length = 0;
+ 63650 shagar.upa 
+ 63650 shagar.upa     if (this.source !== undefined) {
+ 63650 shagar.upa       this.sourceDiffer = this.differs.find(this.source).create(null);
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   updatedDestination() {
+ 63650 shagar.upa     if (this.destination !== undefined) {
+ 63650 shagar.upa       this.destinationDiffer = this.differs.find(this.destination).create(null);
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   direction() {
+ 63650 shagar.upa     return this.format.direction === PicklistComponent.LTR;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   dragEnd(list: BasicList = null) {
+ 63650 shagar.upa     if (list) {
+ 63650 shagar.upa       list.dragStart = false;
+ 63650 shagar.upa     } else {
+ 63650 shagar.upa       this.available.dragStart = false;
+ 63650 shagar.upa       this.confirmed.dragStart = false;
+ 63650 shagar.upa     }
+ 63650 shagar.upa     return false;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   drag(event: DragEvent, item: any, list: BasicList) {
+ 63650 shagar.upa     if (!this.isItemSelected(list.pick, item)) {
+ 63650 shagar.upa       this.selectItem(list.pick, item);
+ 63650 shagar.upa     }
+ 63650 shagar.upa     list.dragStart = true;
+ 63650 shagar.upa     event.dataTransfer.setData('text', item[this.key]);
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   allowDrop(event: DragEvent, list: BasicList) {
+ 63650 shagar.upa     event.preventDefault();
+ 63650 shagar.upa     if (!list.dragStart) {
+ 63650 shagar.upa       list.dragOver = true;
+ 63650 shagar.upa     }
+ 63650 shagar.upa     return false;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   dragLeave() {
+ 63650 shagar.upa     this.available.dragOver = false;
+ 63650 shagar.upa     this.confirmed.dragOver = false;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   drop(event: DragEvent, list: BasicList) {
+ 63650 shagar.upa     event.preventDefault();
+ 63650 shagar.upa     this.dragLeave();
+ 63650 shagar.upa     this.dragEnd();
+ 63650 shagar.upa 
+ 63650 shagar.upa     let id = event.dataTransfer.getData('text');
+ 63650 shagar.upa 
+ 63650 shagar.upa     /* tslint:disable triple-equals */
+ 63650 shagar.upa     // Use coercion to filter.
+ 63650 shagar.upa     let mv = list.list.filter((e: any) => e[this.key] == id);
+ 63650 shagar.upa     /* tslint:enable triple-equals */
+ 63650 shagar.upa     if (mv.length > 0) {
+ 63650 shagar.upa       for (let i = 0, len = mv.length; i < len; i += 1) {
+ 63650 shagar.upa         list.pick.push(mv[i]);
+ 63650 shagar.upa       }
+ 63650 shagar.upa     }
+ 63650 shagar.upa     if (list === this.available) {
+ 63650 shagar.upa       this.moveItem(this.available, this.confirmed);
+ 63650 shagar.upa     } else {
+ 63650 shagar.upa       this.moveItem(this.confirmed, this.available);
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   trueUp() {
+ 63650 shagar.upa     let changed = false;
+ 63650 shagar.upa 
+ 63650 shagar.upa     // Clear removed items.
+ 63650 shagar.upa     let pos = this.destination.length;
+ 63650 shagar.upa     while ((pos -= 1) >= 0) {
+ 63650 shagar.upa       let mv = this.confirmed.list.filter(conf => {
+ 63650 shagar.upa         return conf._id === this.destination[pos][this.key];
+ 63650 shagar.upa       });
+ 63650 shagar.upa 
+ 63650 shagar.upa       if (mv.length === 0) {
+ 63650 shagar.upa         // Not found so remove.
+ 63650 shagar.upa         this.destination.splice(pos, 1);
+ 63650 shagar.upa         changed = true;
+ 63650 shagar.upa       }
+ 63650 shagar.upa     }
+ 63650 shagar.upa 
+ 63650 shagar.upa     // Push added items.
+ 63650 shagar.upa     for (let i = 0, len = this.confirmed.list.length; i < len; i += 1) {
+ 63650 shagar.upa       let mv = this.destination.filter((d: any) => { return (d[this.key] === this.confirmed.list[i]._id); });
+ 63650 shagar.upa 
+ 63650 shagar.upa       if (mv.length === 0) {
+ 63650 shagar.upa         // Not found so add.
+ 63650 shagar.upa         mv = this.source.filter((o: any) => { return (o[this.key] === this.confirmed.list[i]._id); });
+ 63650 shagar.upa 
+ 63650 shagar.upa         if (mv.length > 0) {
+ 63650 shagar.upa           this.destination.push(mv[0]);
+ 63650 shagar.upa           changed = true;
+ 63650 shagar.upa         }
+ 63650 shagar.upa       }
+ 63650 shagar.upa     }
+ 63650 shagar.upa 
+ 63650 shagar.upa     if (changed) {
+ 63650 shagar.upa       this.destinationChange.emit(this.destination);
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   findItemIndex(list: Array<any>, item: any, key: any = '_id') {
+ 63650 shagar.upa     let idx = -1;
+ 63650 shagar.upa 
+ 63650 shagar.upa     // Assumption is that the arrays do not have duplicates.
+ 63650 shagar.upa     list.filter((e: any) => {
+ 63650 shagar.upa       if (e._id === item[key]) {
+ 63650 shagar.upa         idx = list.indexOf(e);
+ 63650 shagar.upa         return true;
+ 63650 shagar.upa       }
+ 63650 shagar.upa       return false;
+ 63650 shagar.upa     });
+ 63650 shagar.upa 
+ 63650 shagar.upa     return idx;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   private makeUnavailable(source: BasicList, item: any) {
+ 63650 shagar.upa     let idx = source.list.indexOf(item);
+ 63650 shagar.upa     if (idx !== -1) {
+ 63650 shagar.upa       source.list.splice(idx, 1);
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   moveItem(source: BasicList, target: BasicList, item: any = null) {
+ 63650 shagar.upa     let i = 0;
+ 63650 shagar.upa     let len = source.pick.length;
+ 63650 shagar.upa 
+ 63650 shagar.upa     if (item) {
+ 63650 shagar.upa       i = source.list.indexOf(item);
+ 63650 shagar.upa       len = i + 1;
+ 63650 shagar.upa     }
+ 63650 shagar.upa 
+ 63650 shagar.upa     for (; i < len; i += 1) {
+ 63650 shagar.upa       // Is the pick still in list?
+ 63650 shagar.upa       let mv: Array<any> = [];
+ 63650 shagar.upa       if (item) {
+ 63650 shagar.upa         let idx = this.findItemIndex(source.pick, item);
+ 63650 shagar.upa         if (idx !== -1) {
+ 63650 shagar.upa           mv[0] = source.pick[idx];
+ 63650 shagar.upa         }
+ 63650 shagar.upa       } else {
+ 63650 shagar.upa         mv = source.list.filter(src => {
+ 63650 shagar.upa           return (src._id === source.pick[i]._id);
+ 63650 shagar.upa         });
+ 63650 shagar.upa       }
+ 63650 shagar.upa 
+ 63650 shagar.upa       // Should only ever be 1
+ 63650 shagar.upa       if (mv.length === 1) {
+ 63650 shagar.upa         // Move if item wasn't already moved by drag-and-drop.
+ 63650 shagar.upa         if (item && item._id === mv[0]._id) {
+ 63650 shagar.upa           target.list.push(mv[0]);
+ 63650 shagar.upa         } else {
+ 63650 shagar.upa           // see if it is already in target?
+ 63650 shagar.upa           if (target.list.filter(trg => { return trg._id === mv[0]._id; }).length === 0) {
+ 63650 shagar.upa             target.list.push(mv[0]);
+ 63650 shagar.upa           }
+ 63650 shagar.upa         }
+ 63650 shagar.upa 
+ 63650 shagar.upa         this.makeUnavailable(source, mv[0]);
+ 63650 shagar.upa       }
+ 63650 shagar.upa     }
+ 63650 shagar.upa 
+ 63650 shagar.upa     if (this.compare !== undefined) {
+ 63650 shagar.upa       target.list.sort(this.compare);
+ 63650 shagar.upa     }
+ 63650 shagar.upa 
+ 63650 shagar.upa     source.pick.length = 0;
+ 63650 shagar.upa 
+ 63650 shagar.upa     // Update destination
+ 63650 shagar.upa     this.trueUp();
+ 63650 shagar.upa 
+ 63650 shagar.upa     // Delay ever-so-slightly to prevent race condition.
+ 63650 shagar.upa     setTimeout(() => {
+ 63650 shagar.upa       this.onFilter(source);
+ 63650 shagar.upa       this.onFilter(target);
+ 63650 shagar.upa     }, 10);
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   isItemSelected(list: Array<any>, item: any) {
+ 63650 shagar.upa     if (list.filter(e => { return Object.is(e, item); }).length > 0) {
+ 63650 shagar.upa       return true;
+ 63650 shagar.upa     }
+ 63650 shagar.upa     return false;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   shiftClick(event: MouseEvent, index: number, source: BasicList, item: any) {
+ 63650 shagar.upa     if (event.shiftKey && source.last && !Object.is(item, source.last)) {
+ 63650 shagar.upa       let idx = source.sift.indexOf(source.last);
+ 63650 shagar.upa       if (index > idx) {
+ 63650 shagar.upa         for (let i = (idx + 1); i < index; i += 1) {
+ 63650 shagar.upa           this.selectItem(source.pick, source.sift[i]);
+ 63650 shagar.upa         }
+ 63650 shagar.upa       } else if (idx !== -1) {
+ 63650 shagar.upa         for (let i = (index + 1); i < idx; i += 1) {
+ 63650 shagar.upa           this.selectItem(source.pick, source.sift[i]);
+ 63650 shagar.upa         }
+ 63650 shagar.upa       }
+ 63650 shagar.upa     }
+ 63650 shagar.upa     source.last = item;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   selectItem(list: Array<any>, item: any) {
+ 63650 shagar.upa     let pk = list.filter((e: any) => {
+ 63650 shagar.upa       return Object.is(e, item);
+ 63650 shagar.upa     });
+ 63650 shagar.upa     if (pk.length > 0) {
+ 63650 shagar.upa       // Already in list, so deselect.
+ 63650 shagar.upa       for (let i = 0, len = pk.length; i < len; i += 1) {
+ 63650 shagar.upa         let idx = list.indexOf(pk[i]);
+ 63650 shagar.upa         if (idx !== -1) {
+ 63650 shagar.upa           list.splice(idx, 1);
+ 63650 shagar.upa         }
+ 63650 shagar.upa       }
+ 63650 shagar.upa     } else {
+ 63650 shagar.upa       list.push(item);
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   selectAll(source: BasicList) {
+ 63650 shagar.upa     source.pick.length = 0;
+ 63650 shagar.upa     source.pick = source.sift.slice(0);
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   selectNone(source: BasicList) {
+ 63650 shagar.upa     source.pick.length = 0;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   isAllSelected(source: BasicList) {
+ 63650 shagar.upa     if (source.list.length === 0 || source.list.length === source.pick.length) {
+ 63650 shagar.upa       return true;
+ 63650 shagar.upa     }
+ 63650 shagar.upa     return false;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   isAnySelected(source: BasicList) {
+ 63650 shagar.upa     if (source.pick.length > 0) {
+ 63650 shagar.upa       return true;
+ 63650 shagar.upa     }
+ 63650 shagar.upa     return false;
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   private unpick(source: BasicList) {
+ 63650 shagar.upa     for (let i = source.pick.length - 1; i >= 0; i -= 1) {
+ 63650 shagar.upa       if (source.sift.indexOf(source.pick[i]) === -1) {
+ 63650 shagar.upa         source.pick.splice(i, 1);
+ 63650 shagar.upa       }
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   clearFilter(source: BasicList) {
+ 63650 shagar.upa     if (source) {
+ 63650 shagar.upa       source.picker = '';
+ 63650 shagar.upa       this.onFilter(source);
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   onFilter(source: BasicList) {
+ 63650 shagar.upa     if (source.picker.length > 0) {
+ 63650 shagar.upa       let filtered = source.list.filter((item: any) => {
+ 63650 shagar.upa         if (Object.prototype.toString.call(item) === '[object Object]') {
+ 63650 shagar.upa           if (item._name !== undefined) {
+ 63650 shagar.upa             return item._name.toLowerCase().indexOf(source.picker.toLowerCase()) !== -1;
+ 63650 shagar.upa           } else {
+ 63650 shagar.upa             return JSON.stringify(item).toLowerCase().indexOf(source.picker.toLowerCase()) !== -1;
+ 63650 shagar.upa           }
+ 63650 shagar.upa         } else {
+ 63650 shagar.upa           return item.toLowerCase().indexOf(source.picker.toLowerCase()) !== -1;
+ 63650 shagar.upa         }
+ 63650 shagar.upa       });
+ 63650 shagar.upa       source.sift = filtered;
+ 63650 shagar.upa       this.unpick(source);
+ 63650 shagar.upa     } else {
+ 63650 shagar.upa       source.sift = source.list;
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa   // Allow for complex names by passing an array of strings.
+ 63650 shagar.upa   // Example: [display]="[ '_type.substring(0,1)', '_name' ]"
+ 63650 shagar.upa   makeName(item: any): string {
+ 63650 shagar.upa     let str = '';
+ 63650 shagar.upa 
+ 63650 shagar.upa     if (this.display !== undefined) {
+ 63650 shagar.upa       if (Object.prototype.toString.call(this.display) === '[object Array]') {
+ 63650 shagar.upa 
+ 63650 shagar.upa         for (let i = 0; i < this.display.length; i += 1) {
+ 63650 shagar.upa           if (str.length > 0) {
+ 63650 shagar.upa             str = str + '_';
+ 63650 shagar.upa           }
+ 63650 shagar.upa 
+ 63650 shagar.upa           if (this.display[i].indexOf('.') === -1) {
+ 63650 shagar.upa             // Simple, just add to string.
+ 63650 shagar.upa             str = str + item[this.display[i]];
+ 63650 shagar.upa 
+ 63650 shagar.upa           } else {
+ 63650 shagar.upa             // Complex, some action needs to be performed
+ 63650 shagar.upa             let parts = this.display[i].split('.');
+ 63650 shagar.upa 
+ 63650 shagar.upa             let s = item[parts[0]];
+ 63650 shagar.upa             if (s) {
+ 63650 shagar.upa               // Use brute force
+ 63650 shagar.upa               if (parts[1].indexOf('substring') !== -1) {
+ 63650 shagar.upa                 let nums = (parts[1].substring(parts[1].indexOf('(') + 1, parts[1].indexOf(')'))).split(',');
+ 63650 shagar.upa 
+ 63650 shagar.upa                 switch (nums.length) {
+ 63650 shagar.upa                   case 1:
+ 63650 shagar.upa                     str = str + s.substring(parseInt(nums[0], 10));
+ 63650 shagar.upa                     break;
+ 63650 shagar.upa                   case 2:
+ 63650 shagar.upa                     str = str + s.substring(parseInt(nums[0], 10), parseInt(nums[1], 10));
+ 63650 shagar.upa                     break;
+ 63650 shagar.upa                   default:
+ 63650 shagar.upa                     str = str + s;
+ 63650 shagar.upa                     break;
+ 63650 shagar.upa                 }
+ 63650 shagar.upa               } else {
+ 63650 shagar.upa                 // method not approved, so just add s.
+ 63650 shagar.upa                 str = str + s;
+ 63650 shagar.upa               }
+ 63650 shagar.upa             }
+ 63650 shagar.upa           }
+ 63650 shagar.upa         }
+ 63650 shagar.upa         return str;
+ 63650 shagar.upa       } else {
+ 63650 shagar.upa         return item[this.display];
+ 63650 shagar.upa       }
+ 63650 shagar.upa     }
+ 63650 shagar.upa 
+ 63650 shagar.upa     switch (Object.prototype.toString.call(item)) {
+ 63650 shagar.upa       case '[object Number]':
+ 63650 shagar.upa         return item;
+ 63650 shagar.upa       case '[object String]':
+ 63650 shagar.upa         return item;
+ 63650 shagar.upa       default:
+ 63650 shagar.upa         if (item !== undefined) {
+ 63650 shagar.upa           return item[this.display];
+ 63650 shagar.upa         }
+ 63650 shagar.upa     }
+ 63650 shagar.upa   }
+ 63650 shagar.upa 
+ 63650 shagar.upa }
